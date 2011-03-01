@@ -7,6 +7,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -18,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -25,6 +29,7 @@ import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
@@ -34,7 +39,6 @@ public class Main {
 	private JFrame popup	 = new JFrame("Resultado");
 	
 	private JLabel cnpjLabel = new JLabel("Informe o CNPJ");
-	private JLabel captchaLabel = new JLabel("Informe o captcha");
 		
 	private JTextField cnpjTextField = new JTextField();
 	private JTextField captchaTextField = new JTextField();
@@ -43,8 +47,7 @@ public class Main {
 	private JButton trocarImagemJButton = new JButton("Trocar imagem");
 	
 	private String cookie = "";
-	private String cookieCaptcha = "";
-	
+	private String session = "";
 	
 	public static void main(String[] args) {
 		new Main().initMainFrame();
@@ -52,6 +55,8 @@ public class Main {
 	}
 	
 	public void initMainFrame() {
+		getReceitaSessionData();
+		
 		GridLayout gl = new GridLayout(3, 2);
 		JFrame jf = new JFrame("CNPJ Catcher");
 		mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -72,20 +77,11 @@ public class Main {
 		enviarJButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-//				popup = new JFrame("Resultado " + new Date());
-//				popup.setSize(640, 480);
-//				JTextArea textArea = new JTextArea();
-//				textArea.setSize(620, 460);
-//				textArea.setText(getData());
-//				JScrollPane scrollPane = new JScrollPane(textArea);
-//				scrollPane.setSize(620, 460);
-//				popup.getContentPane().add(scrollPane, BorderLayout.CENTER);
-//				popup.setVisible(true);
 				popup = new JFrame("Resultado " + new Date());
 				popup.setSize(640, 480);
 				JEditorPane textArea = new JEditorPane();
 				textArea.setSize(620, 460);
-				textArea.setContentType("text/html");
+				//textArea.setContentType("text/html");
 				textArea.setText(getData());
 				JScrollPane scrollPane = new JScrollPane(textArea);
 				scrollPane.setSize(620, 460);
@@ -107,6 +103,40 @@ public class Main {
 		jf.add(trocarImagemJButton);
 		
 		jf.setVisible(true);
+	}
+	
+	public void getReceitaSessionData() {
+		try {
+			HttpURLConnection http = (HttpURLConnection) new URL("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp")
+									 .openConnection();
+			http.setDoInput(true);
+			http.setDoOutput(true);
+			http.setInstanceFollowRedirects(true);
+			http.connect();
+			
+			Map<String, List<String>> reqMap = http.getHeaderFields();
+			StringBuilder sb = new StringBuilder();
+			for(Map.Entry<String, List<String>> e : reqMap.entrySet()) {
+				for(String i : e.getValue()) {
+					sb.append(e.getKey())
+					  .append(": ")
+					  .append(i)
+					  .append("\n");
+					
+					if(e.getKey() != null && e.getKey().startsWith("Set-Cookie")) {
+						session = i.split(";")[0].trim();
+					}
+				}
+			}
+			
+			JOptionPane.showMessageDialog(null, session);
+			
+			
+			http.disconnect();
+		} catch(IOException ex) {
+			System.out.println("Não foi possível conectar");
+			ex.printStackTrace();
+		}
 	}
 	
 	/**
@@ -139,20 +169,22 @@ public class Main {
 		try {
 			URL imgUrl = new URL("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
 			HttpURLConnection http = (HttpURLConnection) imgUrl.openConnection();
+			http.connect();
 			
 			/* resgata os valores do cookie */
-			String aux;
-			int i = 0;
-			while((aux = http.getHeaderField(i)) != null) {
-				if(aux.startsWith("cookieCaptcha")) {
-					cookieCaptcha = getCookieCaptcha(aux);
-					System.out.println("cookieCaptcha=" + cookieCaptcha);
-				}
-				i++;
-			}
-			
+//			StringBuilder sb = new StringBuilder();
+//			String aux;
+//			int i = 0;
+//			while((aux = http.getHeaderField(i)) != null) {
+//				sb.append(aux)
+//				  .append("\n");
+//				i++;
+//			}
+//
 			/* cria a imagem a partir dos bytes da requisição http */
 			Image img = java.awt.Toolkit.getDefaultToolkit().createImage(getImageByteArray(http.getInputStream()));
+			cookie = getCookieCaptcha(http.getHeaderField("Set-Cookie"));
+			System.out.println("Cookie: " + cookie);
 			http.disconnect();
 			return img;
 		} catch(Exception ex) {
@@ -173,68 +205,100 @@ public class Main {
 	}
 	
 	/**
+	 * Retira par cookie do source
+	 * @param src String de origem
+	 * @return String contendo o par=valor do cookie
+	 */
+	public String getCookieCaptcha(String src) {
+		String[] parts = src.split(";");
+		for(String item : parts) {
+			if(item.trim().startsWith("cookieCaptcha")) {
+				return item.trim();
+			}
+		}
+		return null;
+	}
+	
+	/**
 	 * Exemplo do post:  
-	 * cnpj	31456338000186
-	 * idLetra	vjsl
-     * idSom	
-     * origem	comprovante
-	 * search_type	cnpj
-	 * submit1	Consultar
+	 * origem=comprovante&cnpj=31456338000186&idLetra=hyhb&idSom=&submit1=Consultar&search_type=cnpj
 	 * 
 	 * Retorna os dados lidos da receita
 	 * @return String
 	 */
 	public String getData() {
 		try {
-			//String urlStr = "HTTP://www.receita.fazenda.gov.br/PessoaJuridica/CNPJ/cnpjreva/cnpjreva_solicitacao2.asp";
 			String urlStr = "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/valida.asp";
-			//String urlStr = "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Comprovante.asp";
+//			String urlStr = "http://localhost:8080/CaptchaServerTest/CaptchaServlet";
 			URL url = new URL(urlStr);
-			HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
-			httpCon.setRequestProperty("Request-Method", "POST");
-			httpCon.setRequestProperty("Cookie", "flag=1; st8id_.receita.fazenda.gov.br_%2F_wlf=YXNuJTVGNDNf?tix/xc2tp0+rV+boaEK7jkm1uIcA&; cookieCaptcha=_COOKIE_CAPTCHA_"
-			//httpCon.setRequestProperty("Cookie", "flag=1; st8id_.receita.fazenda.gov.br_%2F_wlf=YXNuJTVGNDNf?tix/xc2tp0+rV+boaEK7jkm1uIcA&; cookieCaptcha=_COOKIE_CAPTCHA_; ASPSESSIONIDCSTQTRBQ=OAGKNEFDMHBINJFCJKJPLNGP; ASPSESSIONIDSARTBDDC=CCBHBAMBGJLGBKCAICDPKGME; ASPSESSIONIDSATSACDC=KJJDLCGCEIDFMCMCCFAOGNMF; ASPSESSIONIDSARRACCA=BKJBBBLDPBOKNPLBGIAAKLNM"
-			//httpCon.setRequestProperty("Cookie", "flag=1; cookieCaptcha=_COOKIE_CAPTCHA_"
-					.replaceAll("_COOKIE_CAPTCHA_", cookieCaptcha));
-			httpCon.setDoInput(true);
-			httpCon.setDoOutput(true);
+			HttpURLConnection http = (HttpURLConnection) url.openConnection();
 			
-			OutputStreamWriter osw = new OutputStreamWriter(httpCon.getOutputStream());
-			String params = URLEncoder.encode("cnpj",        "UTF-8") + "=" + URLEncoder.encode(cnpjTextField.getText(),	"UTF-8")
-				    + "&" + URLEncoder.encode("origem",      "UTF-8") + "=" + URLEncoder.encode("comprovante",				"UTF-8")
-				    + "&" + URLEncoder.encode("idField",     "UTF-8") + "=" + URLEncoder.encode(captchaTextField.getText(), "UTF-8")
-				    + "&" + URLEncoder.encode("search_type", "UTF-8") + "=" + URLEncoder.encode("cnpj",						"UTF-8");
-			osw.write(params);
-			osw.flush();
+			//http.setRequestProperty("Cookie", "flag=1; cookieCaptcha" + URLEncoder.encode(cookie.substring(cookie.indexOf("=")), "UTF-8"));
+			http.setRequestProperty("Host",	"www.receita.fazenda.gov.br");
+			http.setRequestProperty("User-Agent", "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2.13) Gecko/20101206 Ubuntu/10.10 (maverick) Firefox/3.6.13");
+			http.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+			http.setRequestProperty("Accept-Language", "en-us,en;q=0.5");
+			http.setRequestProperty("Accept-Encoding", "gzip,deflate");
+			http.setRequestProperty("Accept-Charset", "ISO-8859-1,utf-8;q=0.7,*;q=0.7");
+			http.setRequestProperty("Keep-Alive", "115");
+			http.setRequestProperty("Connection", "keep-alive");
+			http.setRequestProperty("Referer", "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp?cnpj=" + cnpjTextField.getText());
+
+			http.setRequestProperty("Cookie", "flag=1; " + cookie + session);
+			http.setRequestMethod("POST");
+			http.setInstanceFollowRedirects(true);
+			http.setDoInput(true);
+			http.setDoOutput(true);
 			
-			BufferedReader br = new BufferedReader(new InputStreamReader(httpCon.getInputStream()));
+			String params = URLEncoder.encode("origem",      "ISO-8859-1")  + "=" + URLEncoder.encode("comprovante",			  "ISO-8859-1")
+		    		+ "&" + URLEncoder.encode("cnpj",        "ISO-8859-1")  + "=" + URLEncoder.encode(cnpjTextField.getText(),	  "ISO-8859-1") 
+		    		+ "&" + URLEncoder.encode("idLetra",     "ISO-8859-1")  + "=" + URLEncoder.encode(captchaTextField.getText(), "ISO-8859-1")
+		    		+ "&" + URLEncoder.encode("idSom",       "ISO-8859-1")  + "=" + URLEncoder.encode("", 						  "ISO-8859-1")
+		    		+ "&" + URLEncoder.encode("submit1", 	 "ISO-8859-1")  + "=" + URLEncoder.encode("Consultar",				  "ISO-8859-1")
+		    		+ "&" + URLEncoder.encode("search_type", "ISO-8859-1")  + "=" + URLEncoder.encode("cnpj",		 			  "ISO-8859-1");
+			
+
+			http.setRequestProperty("Content-Length", "" + Integer.toString(params.getBytes().length));
+			System.out.println("[" + params.length() + "] " + params);
+			http.setUseCaches(false);
+			http.connect();
+			
+
+			DataOutputStream dos = new DataOutputStream(http.getOutputStream());
+			dos.writeBytes(params);
+			dos.flush();
+			dos.close();
+			
+			System.out.println("Method: "  		 + http.getRequestMethod());
+			System.out.println("Content: " 		 + http.getContent().toString());
+			System.out.println("Content Type: "  + http.getContentType().toString());
+			System.out.println("Response Code: " + http.getResponseCode());
+			
+			for(Map.Entry<String, List<String>> e : http.getHeaderFields().entrySet()) {
+				System.out.println(e.getKey());
+				for(String i : e.getValue()) {
+					System.out.println("\t" + i);
+				}
+			}
+
+//			OutputStreamWriter osw = new OutputStreamWriter(http.getOutputStream());
+//			osw.write(params);
+//			osw.flush();
+			
+			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
 			String aux;
 			StringBuilder inputStr = new StringBuilder();
 			while((aux = br.readLine()) != null) {
 				inputStr.append(aux)
 						.append("\n");
 			}
-			osw.close();
+//			osw.close();
 			br.close();
-			httpCon.disconnect();
+			http.disconnect();
 			return inputStr.toString();
 		} catch(Exception ex) {
 			ex.printStackTrace();
 			return null;
 		}
-	}
-	
-	/**
-	 * Recebe uma string no formato cookieCaptcha=XXXXXXXXX e retorna só o XXXXXXXXX
-	 * @param s
-	 * @return String
-	 */
-	public String getCookieCaptcha(String s) {
-		String[] parts = s.split("=");
-		return parts[1];
-	}
-	
-	public URL getUrl() {
-		return null;
 	}
 }
