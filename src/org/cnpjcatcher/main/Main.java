@@ -72,6 +72,7 @@ public class Main {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				popup = new JFrame("Resultado " + new Date());
+				popup.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 				popup.setSize(640, 480);
 				JEditorPane textArea = new JEditorPane();
 				textArea.setSize(620, 460);
@@ -95,16 +96,17 @@ public class Main {
 		
 		jf.add(enviarJButton);
 		jf.add(trocarImagemJButton);
-		
 		jf.setVisible(true);
 	}
 	
+	/**
+	 * Recebe os dados da receita
+	 */
 	public void getReceitaSessionData() {
 		try {
 			HttpURLConnection http = (HttpURLConnection) new URL("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp")
 									 .openConnection();
-			http.setDoInput(true);
-			http.setDoOutput(true);
+			http.setRequestProperty("Cookie", "flag=0");
 			http.setInstanceFollowRedirects(true);
 			http.connect();
 			
@@ -123,8 +125,7 @@ public class Main {
 				}
 			}
 			
-			JOptionPane.showMessageDialog(null, session);
-			
+			JOptionPane.showMessageDialog(null, session + "\n" + sb.toString());
 			
 			http.disconnect();
 		} catch(IOException ex) {
@@ -163,22 +164,21 @@ public class Main {
 		try {
 			URL imgUrl = new URL("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
 			HttpURLConnection http = (HttpURLConnection) imgUrl.openConnection();
+			http.setRequestProperty("Cookie", session + "; cookieCaptcha=;");
+			http.setRequestProperty("Cache-Control", "max-age=0");
 			http.connect();
+			
+			System.out.println("Session enviada para a gerar a imagem: " + session);
+			
 			cookie = getCookieCaptcha(http.getHeaderField("Set-Cookie"));
 			
-			/* resgata os valores do cookie */
-//			StringBuilder sb = new StringBuilder();
-//			String aux;
-//			int i = 0;
-//			while((aux = http.getHeaderField(i)) != null) {
-//				sb.append(aux)
-//				  .append("\n");
-//				i++;
-//			}
-//
+			System.out.println("getCnpjCaptcha Set-Cookie: " + http.getHeaderField("Set-Cookie"));
+			System.out.println("\n\n\nHeader: " + getRequestHeaders(http.getHeaderFields()));
+			
 			/* cria a imagem a partir dos bytes da requisição http */
 			Image img = java.awt.Toolkit.getDefaultToolkit().createImage(getImageByteArray(http.getInputStream()));
 			System.out.println("Cookie: " + cookie);
+			
 			http.disconnect();
 			return img;
 		} catch(Exception ex) {
@@ -204,6 +204,7 @@ public class Main {
 	 * @return String contendo o par=valor do cookie
 	 */
 	public String getCookieCaptcha(String src) {
+		System.out.println("Full-cookie: " + src);
 		String[] parts = src.split(";");
 		for(String item : parts) {
 			if(item.trim().startsWith("cookieCaptcha")) {
@@ -225,37 +226,34 @@ public class Main {
 //			String urlStr = "http://localhost:8080/CaptchaServerTest/CaptchaServlet";
 			URL url = new URL("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/valida.asp");
 			HttpURLConnection http = (HttpURLConnection) url.openConnection();
-			
-			http.setRequestProperty("Host",	"www.receita.fazenda.gov.br");
-			http.setRequestProperty("User-Agent", "Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.2.13) Gecko/20101206 Ubuntu/10.10 (maverick) Firefox/3.6.13");
-			http.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-			http.setRequestProperty("Accept-Language", "en-us,en;q=0.5");
-			http.setRequestProperty("Accept-Encoding", "gzip,deflate");
-			http.setRequestProperty("Accept-Charset", "ISO-8859-1,utf-8;q=0.7,*;q=0.7");
-			http.setRequestProperty("Keep-Alive", "115");
-			http.setRequestProperty("Connection", "keep-alive");
-			http.setRequestProperty("Referer", "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp?cnpj=" + cnpjTextField.getText());
-
 			http.setRequestMethod("POST");
 			
-			String cookieProperty = "flag=1; " + cookie + "; " + session; 
+			String cookieProperty = "flag=1; " + session + "; " + cookie;
+			//String cookieProperty = "flag=1; " + "ASPSESSIONIDAQRCBSCQ=OEODKMPCOOKIBFJFAILAOMDK;" + " 	cookieCaptcha=v8K1lINaHPNbJPY5n3gwwaLjaSPI5UU4vpwxbqDbi08=";
+			
+			// --- teste com dados do browser
+			String bcookie  = "ASPSESSIONIDCSRCCSDQ=JHCNLAHDKDHEMFNEEBEFIKBF" + "; ";
+			String bsession = "	cookieCaptcha=8UpRMTBPcqzDYOJdsqWCp+iVu32WJb0+nueNqqJeNxk=" + "; ";
+//			String cookieProperty = "flag=1; " + bcookie + bsession;
+			// --- fim teste com dados do browser
+			
+			
 			System.out.println(cookieProperty);
 			http.setRequestProperty("Cookie", cookieProperty);
 			
-			http.setInstanceFollowRedirects(true);
+			http.setInstanceFollowRedirects(false);
 			http.setDoInput(true);
 			http.setDoOutput(true);
 			http.setUseCaches(false);
 			
 			System.out.println("[" + captchaTextField.getText() + "]");
 			
-			String params = URLEncoder.encode("origem",      "ISO-8859-1")  + "=" + URLEncoder.encode("comprovante",			  "ISO-8859-1")
-		    		+ "&" + URLEncoder.encode("cnpj",        "ISO-8859-1")  + "=" + URLEncoder.encode(cnpjTextField.getText(),	  "ISO-8859-1") 
-		    		+ "&" + URLEncoder.encode("idLetra",     "ISO-8859-1")  + "=" + URLEncoder.encode(captchaTextField.getText(), "ISO-8859-1")
-		    		+ "&" + URLEncoder.encode("idSom",       "ISO-8859-1")  + "=" + URLEncoder.encode("", 						  "ISO-8859-1")
-		    		+ "&" + URLEncoder.encode("submit1", 	 "ISO-8859-1")  + "=" + URLEncoder.encode("Consultar",				  "ISO-8859-1")
-		    		+ "&" + URLEncoder.encode("search_type", "ISO-8859-1")  + "=" + URLEncoder.encode("cnpj",		 			  "ISO-8859-1");
-			
+			String params = URLEncoder.encode("origem",      "UTF-8")  + "=" + URLEncoder.encode("comprovante",			      "UTF-8")
+		    		+ "&" + URLEncoder.encode("cnpj",        "UTF-8")  + "=" + URLEncoder.encode(cnpjTextField.getText(),	  "UTF-8") 
+		    		+ "&" + URLEncoder.encode("idLetra",     "UTF-8")  + "=" + URLEncoder.encode(captchaTextField.getText(),  "UTF-8")
+		    		+ "&" + URLEncoder.encode("idSom",       "UTF-8")  + "=" + URLEncoder.encode("", 						  "UTF-8")
+		    		+ "&" + URLEncoder.encode("submit1", 	 "UTF-8")  + "=" + URLEncoder.encode("Consultar",				  "UTF-8")
+		    		+ "&" + URLEncoder.encode("search_type", "UTF-8")  + "=" + URLEncoder.encode("cnpj",		 			  "UTF-8");
 
 			http.setRequestProperty("Content-Length", "" + Integer.toString(params.getBytes().length));
 			http.connect();
@@ -297,5 +295,23 @@ public class Main {
 			ex.printStackTrace();
 			return null;
 		}
+	}
+	
+	/**
+	 * Mostra o header da requisição
+	 * @param headerMap
+	 * @return String 
+	 */
+	public String getRequestHeaders(Map<String, List<String>> headerMap) {
+		StringBuilder sb = new StringBuilder();
+		for(Map.Entry<String, List<String>> e : headerMap.entrySet()) {
+			for(String i : e.getValue()) {
+				sb.append(e.getKey())
+				  .append(": ")
+				  .append(i)
+				  .append("\n");
+			}
+		}
+		return sb.toString();
 	}
 }

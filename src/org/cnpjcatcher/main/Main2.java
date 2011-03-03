@@ -1,10 +1,10 @@
 package org.cnpjcatcher.main;
 
-import java.io.DataInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.net.Socket;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.UnknownHostException;
 
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -23,20 +23,19 @@ public class Main2 {
 
 	public static void main(String[] args) {
 		try {
-			Socket socket = new Socket("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp", 80);
-			DataInputStream dis = new DataInputStream(socket.getInputStream());
-			int i;
-			while((i = dis.read()) != -1) {
-				System.out.print(i);
+			URL imgUrl = new URL("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
+			//URL imgUrl = new URL("http://t1.gstatic.com/images?q=tbn:ANd9GcRi0r2NDo2VhE4h4AAWYXvTK3ojdmHyHy4wBrTyjR8T0MFRhhAl0A");
+			HttpURLConnection http = (HttpURLConnection) imgUrl.openConnection();
+			http.connect();
+			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
+			String aux;
+			while((aux = br.readLine()) != null) {
+				System.out.println(aux + "\n");
 			}
-			socket.close();
-			
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
+			http.disconnect();
+		} catch(Exception ex) {
+			ex.printStackTrace();
 		}
-		
 	}
 
 	public void initMainFrame() {
