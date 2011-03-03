@@ -10,6 +10,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.HttpCookie;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.StringTokenizer;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -165,19 +167,18 @@ public class Main {
 			URL imgUrl = new URL("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
 			HttpURLConnection http = (HttpURLConnection) imgUrl.openConnection();
 			http.setRequestProperty("Cookie", session + "; cookieCaptcha=;");
-			http.setRequestProperty("Cache-Control", "max-age=0");
 			http.connect();
 			
-			System.out.println("Session enviada para a gerar a imagem: " + session);
+			System.out.println("getCnpjCaptcha(): session enviada para a gerar a imagem: " + session);
 			
 			cookie = getCookieCaptcha(http.getHeaderField("Set-Cookie"));
 			
-			System.out.println("getCnpjCaptcha Set-Cookie: " + http.getHeaderField("Set-Cookie"));
+			System.out.println("getCnpjCaptcha(): Set-Cookie: " + http.getHeaderField("Set-Cookie"));
 			System.out.println("\n\n\nHeader: " + getRequestHeaders(http.getHeaderFields()));
 			
 			/* cria a imagem a partir dos bytes da requisição http */
 			Image img = java.awt.Toolkit.getDefaultToolkit().createImage(getImageByteArray(http.getInputStream()));
-			System.out.println("Cookie: " + cookie);
+			System.out.println("getCnpjCaptcha(): cookie: " + cookie);
 			
 			http.disconnect();
 			return img;
@@ -263,22 +264,11 @@ public class Main {
 			dos.writeBytes(params);
 			dos.flush();
 			
-			System.out.println("Response Cookie: " + http.getHeaderField("Set-Cookie"));
-			System.out.println("Method: "  		   + http.getRequestMethod());
-			System.out.println("Content: " 		   + http.getContent().toString());
-			System.out.println("Content Type: "    + http.getContentType().toString());
-			System.out.println("Response Code: "   + http.getResponseCode());
-			
-//			for(Map.Entry<String, List<String>> e : http.getHeaderFields().entrySet()) {
-//				System.out.println(e.getKey());
-//				for(String i : e.getValue()) {
-//					System.out.println("\t" + i);
-//				}
-//			}
-
-//			OutputStreamWriter osw = new OutputStreamWriter(http.getOutputStream());
-//			osw.write(params);
-//			osw.flush();
+			System.out.println("getCnpjCaptcha(): Response Cookie: " + http.getHeaderField("Set-Cookie"));
+			System.out.println("getCnpjCaptcha(): Method: "  		   + http.getRequestMethod());
+			System.out.println("getCnpjCaptcha(): Content: " 		   + http.getContent().toString());
+			System.out.println("getCnpjCaptcha(): Content Type: "    + http.getContentType().toString());
+			System.out.println("getCnpjCaptcha(): Response Code: "   + http.getResponseCode());
 			
 			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
 			String aux;
@@ -289,8 +279,11 @@ public class Main {
 			}
 			br.close();
 			dos.close();
+			
+			// System.out.println(getRequestHeaders(http.getHeaderFields()));
+			
 			http.disconnect();
-			return inputStr.toString();
+			return getCnpjData(inputStr.toString());
 		} catch(Exception ex) {
 			ex.printStackTrace();
 			return null;
@@ -313,5 +306,37 @@ public class Main {
 			}
 		}
 		return sb.toString();
+	}
+	
+	/**
+	 * Recebe o link de redirecionamento e busca os dados da empresa
+	 * @param source
+	 * @return String
+	 */
+	public String getCnpjData(String source) {
+		try {
+			source = source.substring(source.indexOf("\"") + 1, source.lastIndexOf("\""));
+			System.out.println(source);
+			String url = "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/" + source.replaceAll("&amp;", "&");
+			HttpURLConnection http = (HttpURLConnection) new URL(url).openConnection();
+			http.setDoInput(true);
+			http.setDoOutput(true);
+			http.setInstanceFollowRedirects(true);
+			http.setRequestProperty("Cookie", "flag=1; " + cookie + "; " + session);
+			http.connect();
+			
+			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
+			String aux;
+			StringBuilder inputStr = new StringBuilder();
+			while((aux = br.readLine()) != null) {
+				inputStr.append(aux)
+						.append("\n");
+			}
+			br.close();
+			return inputStr.toString();
+		} catch(IOException ex) {
+			ex.printStackTrace();
+		}
+		return source;
 	}
 }
