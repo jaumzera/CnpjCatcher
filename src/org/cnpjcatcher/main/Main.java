@@ -10,15 +10,15 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpCookie;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.StringTokenizer;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -26,7 +26,6 @@ import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
@@ -79,7 +78,7 @@ public class Main {
 				JEditorPane textArea = new JEditorPane();
 				textArea.setSize(620, 460);
 				//textArea.setContentType("text/html");
-				textArea.setText(getData());
+				textArea.setText(getCleanFields(getData()));
 				JScrollPane scrollPane = new JScrollPane(textArea);
 				scrollPane.setSize(620, 460);
 				popup.getContentPane().add(scrollPane, BorderLayout.CENTER);
@@ -102,14 +101,32 @@ public class Main {
 	}
 	
 	/**
-	 * Recebe os dados da receita
+	 * Retorna uma conexão Http a partir de uma URL
+	 * @param url String representando a URL	
+	 * @return HttpURLConnection
+	 */
+	public HttpURLConnection getHttpUrlConnection(String url) {
+		try {
+			return (HttpURLConnection) new URL(url).openConnection();
+		} catch (MalformedURLException e) {
+			e.printStackTrace();
+			return null;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	/**
+	 * Pega os dados de sessão do site da Receita
 	 */
 	public void getReceitaSessionData() {
 		try {
-			HttpURLConnection http = (HttpURLConnection) new URL("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp")
-									 .openConnection();
+			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp");
+			
 			http.setRequestProperty("Cookie", "flag=0");
 			http.setInstanceFollowRedirects(true);
+			
 			http.connect();
 			
 			Map<String, List<String>> reqMap = http.getHeaderFields();
@@ -121,17 +138,15 @@ public class Main {
 					  .append(i)
 					  .append("\n");
 					
-					if(e.getKey() != null && e.getKey().startsWith("Set-Cookie")) {
+					if(e.getKey() != null && e.getKey().startsWith("Set-Cookie") && i.contains("SESSION")) {
 						session = i.split(";")[0].trim();
 					}
 				}
 			}
 			
-			JOptionPane.showMessageDialog(null, session + "\n" + sb.toString());
-			
 			http.disconnect();
 		} catch(IOException ex) {
-			System.out.println("Não foi possível conectar");
+			System.out.println("getReceitaSessionData(): não foi possível conectar");
 			ex.printStackTrace();
 		}
 	}
@@ -164,25 +179,29 @@ public class Main {
 	 */
 	public Image getCnpjCaptcha() {
 		try {
-			URL imgUrl = new URL("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
-			HttpURLConnection http = (HttpURLConnection) imgUrl.openConnection();
+			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
 			http.setRequestProperty("Cookie", session + "; cookieCaptcha=;");
 			http.connect();
 			
+			//TODO: remover 1
 			System.out.println("getCnpjCaptcha(): session enviada para a gerar a imagem: " + session);
 			
 			cookie = getCookieCaptcha(http.getHeaderField("Set-Cookie"));
 			
+			// TODO: remover 2
 			System.out.println("getCnpjCaptcha(): Set-Cookie: " + http.getHeaderField("Set-Cookie"));
 			System.out.println("\n\n\nHeader: " + getRequestHeaders(http.getHeaderFields()));
 			
 			/* cria a imagem a partir dos bytes da requisição http */
 			Image img = java.awt.Toolkit.getDefaultToolkit().createImage(getImageByteArray(http.getInputStream()));
+			
+			// TODO remover 1
 			System.out.println("getCnpjCaptcha(): cookie: " + cookie);
 			
 			http.disconnect();
 			return img;
 		} catch(Exception ex) {
+			System.out.println("getCnpjCaptcha(): erro ao construir imagem captcha");
 			ex.printStackTrace();
 			return null;
 		}
@@ -205,7 +224,9 @@ public class Main {
 	 * @return String contendo o par=valor do cookie
 	 */
 	public String getCookieCaptcha(String src) {
+		// TODO: remover 1
 		System.out.println("Full-cookie: " + src);
+
 		String[] parts = src.split(";");
 		for(String item : parts) {
 			if(item.trim().startsWith("cookieCaptcha")) {
@@ -217,37 +238,24 @@ public class Main {
 	
 	/**
 	 * Exemplo do post:  
-	 * origem=comprovante&cnpj=31456338000186&idLetra=hyhb&idSom=&submit1=Consultar&search_type=cnpj
+	 * 		origem=comprovante&cnpj=31456338000186&idLetra=hyhb&idSom=&submit1=Consultar&search_type=cnpj
 	 * 
 	 * Retorna os dados lidos da receita
 	 * @return String
 	 */
 	public String getData() {
 		try {
-//			String urlStr = "http://localhost:8080/CaptchaServerTest/CaptchaServlet";
-			URL url = new URL("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/valida.asp");
-			HttpURLConnection http = (HttpURLConnection) url.openConnection();
+			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/valida.asp");
+
 			http.setRequestMethod("POST");
-			
+
 			String cookieProperty = "flag=1; " + session + "; " + cookie;
-			//String cookieProperty = "flag=1; " + "ASPSESSIONIDAQRCBSCQ=OEODKMPCOOKIBFJFAILAOMDK;" + " 	cookieCaptcha=v8K1lINaHPNbJPY5n3gwwaLjaSPI5UU4vpwxbqDbi08=";
-			
-			// --- teste com dados do browser
-			String bcookie  = "ASPSESSIONIDCSRCCSDQ=JHCNLAHDKDHEMFNEEBEFIKBF" + "; ";
-			String bsession = "	cookieCaptcha=8UpRMTBPcqzDYOJdsqWCp+iVu32WJb0+nueNqqJeNxk=" + "; ";
-//			String cookieProperty = "flag=1; " + bcookie + bsession;
-			// --- fim teste com dados do browser
-			
-			
-			System.out.println(cookieProperty);
 			http.setRequestProperty("Cookie", cookieProperty);
 			
 			http.setInstanceFollowRedirects(false);
 			http.setDoInput(true);
 			http.setDoOutput(true);
 			http.setUseCaches(false);
-			
-			System.out.println("[" + captchaTextField.getText() + "]");
 			
 			String params = URLEncoder.encode("origem",      "UTF-8")  + "=" + URLEncoder.encode("comprovante",			      "UTF-8")
 		    		+ "&" + URLEncoder.encode("cnpj",        "UTF-8")  + "=" + URLEncoder.encode(cnpjTextField.getText(),	  "UTF-8") 
@@ -263,12 +271,14 @@ public class Main {
 			DataOutputStream dos = new DataOutputStream(http.getOutputStream());
 			dos.writeBytes(params);
 			dos.flush();
-			
-			System.out.println("getCnpjCaptcha(): Response Cookie: " + http.getHeaderField("Set-Cookie"));
+			dos.close();
+
+			// TODO: remover 5
+			System.out.println("getCnpjCaptcha(): Response Cookie: "   + http.getHeaderField("Set-Cookie"));
 			System.out.println("getCnpjCaptcha(): Method: "  		   + http.getRequestMethod());
 			System.out.println("getCnpjCaptcha(): Content: " 		   + http.getContent().toString());
-			System.out.println("getCnpjCaptcha(): Content Type: "    + http.getContentType().toString());
-			System.out.println("getCnpjCaptcha(): Response Code: "   + http.getResponseCode());
+			System.out.println("getCnpjCaptcha(): Content Type: "      + http.getContentType().toString());
+			System.out.println("getCnpjCaptcha(): Response Code: "     + http.getResponseCode());
 			
 			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
 			String aux;
@@ -278,9 +288,6 @@ public class Main {
 						.append("\n");
 			}
 			br.close();
-			dos.close();
-			
-			// System.out.println(getRequestHeaders(http.getHeaderFields()));
 			
 			http.disconnect();
 			return getCnpjData(inputStr.toString());
@@ -291,6 +298,7 @@ public class Main {
 	}
 	
 	/**
+	 * TODO: remover *
 	 * Mostra o header da requisição
 	 * @param headerMap
 	 * @return String 
@@ -316,16 +324,15 @@ public class Main {
 	public String getCnpjData(String source) {
 		try {
 			source = source.substring(source.indexOf("\"") + 1, source.lastIndexOf("\""));
-			System.out.println(source);
-			String url = "http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/" + source.replaceAll("&amp;", "&");
-			HttpURLConnection http = (HttpURLConnection) new URL(url).openConnection();
+			
+			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/" + source.replaceAll("&amp;", "&"));
 			http.setDoInput(true);
 			http.setDoOutput(true);
 			http.setInstanceFollowRedirects(true);
 			http.setRequestProperty("Cookie", "flag=1; " + cookie + "; " + session);
 			http.connect();
 			
-			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
+			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream(), Charset.forName("ISO-8859-1")));
 			String aux;
 			StringBuilder inputStr = new StringBuilder();
 			while((aux = br.readLine()) != null) {
@@ -333,10 +340,75 @@ public class Main {
 						.append("\n");
 			}
 			br.close();
+			http.disconnect();
 			return inputStr.toString();
 		} catch(IOException ex) {
 			ex.printStackTrace();
 		}
 		return source;
+	}
+	
+	public String getCleanFields(String data) {
+		DataFilter df = new DataFilter(data);
+		StringBuilder out = new StringBuilder();
+		
+		out.append("Número de inscrição:\t")
+		   .append(df.getInfo("NÚMERO DE INSCRIÇÃO", "COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL"))
+		   .append("\n");
+		
+		out.append("Nome empresarial:\t")
+		   .append(df.getInfo("NOME EMPRESARIAL", "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)"))
+		   .append("\n");
+		   
+	   out.append("Título do estabelecimento: ")
+		   .append(df.getInfo("TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)", "CÓDIGO DE DESCRICAO DA ATIVIDADE ECONÔMICA PRINCIPAL"))
+		   .append("\n");
+	   
+	   out.append("Data de abertura:\t")
+	   	  .append(df.getInfo("DATA DE ABERTURA", "NOME EMPRESARIAL"))
+	      .append("\n");
+	   
+	   out.append("Nome empresarial:\t")
+	   	  .append(df.getInfo("NOME EMPRESARIAL", "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)"))
+	      .append("\n");
+	   
+	   out.append("Nome de fantasia:\t")
+	   	  .append(df.getInfo("TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)", "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL"))
+	      .append("\n");
+	   
+//	   out.append("Logradouro:\t")
+//	   	  .append(df.getInfo("LOGRADOURO", "NÚMERO"))
+//	      .append("\n");
+	   
+//	   out.append("Número:\t")
+//	   	  .append(df.getInfo("NÚMERO", "COMPLEMENTO"))
+//	      .append("\n");
+	   
+	   out.append("Complemento:\t")
+	   	  .append(df.getInfo("COMPLEMENTO", "CEP"))
+	      .append("\n");
+	   
+	   out.append("CEP:\t")
+	   	  .append(df.getInfo("CEP", "BAIRRO/DISTRITO"))
+	      .append("\n");
+	   
+	   out.append("Bairro:\t")
+	   	  .append(df.getInfo("BAIRRO/DISTRITO", "MUNICIPIO"))
+	      .append("\n");
+	   
+	   out.append("Municipio:\t")
+	   	  .append(df.getInfo("MUNICIPIO", "UF"))
+	      .append("\n");
+	   
+	   out.append("UF:\t")
+	   	  .append(df.getInfo("UF", "SITUACAO CADASTRAL"))
+	      .append("\n");
+	   
+	   out.append("Situação cadastral:\t")
+	   	  .append(df.getInfo("SITUACAO CADASTRAL", "DATA DA SITUAÇÃO CADASTRAL"))
+	      .append("\n");
+	   
+	   
+	   return out.toString();
 	}
 }
