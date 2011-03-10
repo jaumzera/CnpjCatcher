@@ -2,23 +2,12 @@ package org.cnpjcatcher.main;
 
 import java.awt.BorderLayout;
 import java.awt.GridLayout;
-import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.net.URLEncoder;
-import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -42,19 +31,20 @@ public class Main {
 	private JButton enviarJButton = new JButton("Enviar");
 	private JButton trocarImagemJButton = new JButton("Trocar imagem");
 	
-	private String cookie = "";
-	private String session = "";
+	private CnpjCatcher cnpjCatcher;
+	
 	
 	public static void main(String[] args) {
 		new Main().initMainFrame();
 	}
 	
 	public void initMainFrame() {
-		getReceitaSessionData();
+		cnpjCatcher = new CnpjCatcher();
 		
 		GridLayout gl = new GridLayout(3, 2);
 		JFrame jf = new JFrame("CNPJ Catcher");
 		mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		//mainFrame.add
 		jf.setLayout(gl);
 		jf.setSize(400, 250);
 		
@@ -78,7 +68,7 @@ public class Main {
 				JEditorPane textArea = new JEditorPane();
 				textArea.setSize(620, 460);
 				//textArea.setContentType("text/html");
-				textArea.setText(getCleanFields(getData()));
+				textArea.setText(getData());
 				JScrollPane scrollPane = new JScrollPane(textArea);
 				scrollPane.setSize(620, 460);
 				popup.getContentPane().add(scrollPane, BorderLayout.CENTER);
@@ -90,8 +80,8 @@ public class Main {
 		trocarImagemJButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				ImageIcon ii = new ImageIcon(getCnpjCaptcha());
-				imageLabel.setIcon(ii);
+//				ImageIcon ii = new ImageIcon(getCnpjCaptcha());
+//				imageLabel.setIcon(ii);
 			}
 		});
 		
@@ -101,314 +91,34 @@ public class Main {
 	}
 	
 	/**
-	 * Retorna uma conexão Http a partir de uma URL
-	 * @param url String representando a URL	
-	 * @return HttpURLConnection
-	 */
-	public HttpURLConnection getHttpUrlConnection(String url) {
-		try {
-			return (HttpURLConnection) new URL(url).openConnection();
-		} catch (MalformedURLException e) {
-			e.printStackTrace();
-			return null;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
-	
-	/**
-	 * Pega os dados de sessão do site da Receita
-	 */
-	public void getReceitaSessionData() {
-		try {
-			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/Cnpjreva_Solicitacao2.asp");
-			
-			http.setRequestProperty("Cookie", "flag=0");
-			http.setInstanceFollowRedirects(true);
-			
-			http.connect();
-			
-			Map<String, List<String>> reqMap = http.getHeaderFields();
-			StringBuilder sb = new StringBuilder();
-			for(Map.Entry<String, List<String>> e : reqMap.entrySet()) {
-				for(String i : e.getValue()) {
-					sb.append(e.getKey())
-					  .append(": ")
-					  .append(i)
-					  .append("\n");
-					
-					if(e.getKey() != null && e.getKey().startsWith("Set-Cookie") && i.contains("SESSION")) {
-						session = i.split(";")[0].trim();
-					}
-				}
-			}
-			
-			http.disconnect();
-		} catch(IOException ex) {
-			System.out.println("getReceitaSessionData(): não foi possível conectar");
-			ex.printStackTrace();
-		}
-	}
-	
-	/**
-	 * Retorna o array de bytes da imagem
-	 * @param is
-	 * @return byte[]
-	 */
-	public byte[] getImageByteArray(InputStream is) {
-		try {
-			byte[] b1 = new byte[99999];
-			int b;
-			int i = 0;
-			while((b = is.read()) != -1) {
-				b1[i] = (byte) b;
-				i++;
-			}
-			byte[] b2 = Arrays.copyOf(b1, i);
-			return b2;
-		} catch(IOException ex) {
-			ex.printStackTrace();
-			return null;
-		}
-	}
-	
-	/**
-	 * Retorna o objeto imagem correspondente ao captcha
-	 * @return Image
-	 */
-	public Image getCnpjCaptcha() {
-		try {
-			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/scripts/srf/intercepta/captcha.aspx?opt=image");
-			http.setRequestProperty("Cookie", session + "; cookieCaptcha=;");
-			http.connect();
-			
-			//TODO: remover 1
-			System.out.println("getCnpjCaptcha(): session enviada para a gerar a imagem: " + session);
-			
-			cookie = getCookieCaptcha(http.getHeaderField("Set-Cookie"));
-			
-			// TODO: remover 2
-			System.out.println("getCnpjCaptcha(): Set-Cookie: " + http.getHeaderField("Set-Cookie"));
-			System.out.println("\n\n\nHeader: " + getRequestHeaders(http.getHeaderFields()));
-			
-			/* cria a imagem a partir dos bytes da requisição http */
-			Image img = java.awt.Toolkit.getDefaultToolkit().createImage(getImageByteArray(http.getInputStream()));
-			
-			// TODO remover 1
-			System.out.println("getCnpjCaptcha(): cookie: " + cookie);
-			
-			http.disconnect();
-			return img;
-		} catch(Exception ex) {
-			System.out.println("getCnpjCaptcha(): erro ao construir imagem captcha");
-			ex.printStackTrace();
-			return null;
-		}
-	}
-	
-	/**
 	 * Retorna um JLabel contendo a imagem do captcha
 	 * @return JLabel
 	 */
 	public JLabel getCaptchaLabel() {
 		JLabel jl = new JLabel();
-		Icon icon = new ImageIcon(getCnpjCaptcha());
+		Icon icon = new ImageIcon(cnpjCatcher.getCaptchaImageBytes());
 		jl.setIcon(icon);
 		return jl;
 	}
 	
 	/**
-	 * Retira par cookie do source
-	 * @param src String de origem
-	 * @return String contendo o par=valor do cookie
-	 */
-	public String getCookieCaptcha(String src) {
-		// TODO: remover 1
-		System.out.println("Full-cookie: " + src);
-
-		String[] parts = src.split(";");
-		for(String item : parts) {
-			if(item.trim().startsWith("cookieCaptcha")) {
-				return item.trim();
-			}
-		}
-		return null;
-	}
-	
-	/**
-	 * Exemplo do post:  
-	 * 		origem=comprovante&cnpj=31456338000186&idLetra=hyhb&idSom=&submit1=Consultar&search_type=cnpj
-	 * 
-	 * Retorna os dados lidos da receita
-	 * @return String
+	 * Faz o post e joga as informações nos campos do 
+	 * form de apresentação
 	 */
 	public String getData() {
-		try {
-			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/valida.asp");
-
-			http.setRequestMethod("POST");
-
-			String cookieProperty = "flag=1; " + session + "; " + cookie;
-			http.setRequestProperty("Cookie", cookieProperty);
-			
-			http.setInstanceFollowRedirects(false);
-			http.setDoInput(true);
-			http.setDoOutput(true);
-			http.setUseCaches(false);
-			
-			String params = URLEncoder.encode("origem",      "UTF-8")  + "=" + URLEncoder.encode("comprovante",			      "UTF-8")
-		    		+ "&" + URLEncoder.encode("cnpj",        "UTF-8")  + "=" + URLEncoder.encode(cnpjTextField.getText(),	  "UTF-8") 
-		    		+ "&" + URLEncoder.encode("idLetra",     "UTF-8")  + "=" + URLEncoder.encode(captchaTextField.getText(),  "UTF-8")
-		    		+ "&" + URLEncoder.encode("idSom",       "UTF-8")  + "=" + URLEncoder.encode("", 						  "UTF-8")
-		    		+ "&" + URLEncoder.encode("submit1", 	 "UTF-8")  + "=" + URLEncoder.encode("Consultar",				  "UTF-8")
-		    		+ "&" + URLEncoder.encode("search_type", "UTF-8")  + "=" + URLEncoder.encode("cnpj",		 			  "UTF-8");
-
-			http.setRequestProperty("Content-Length", "" + Integer.toString(params.getBytes().length));
-			http.connect();
-			System.out.println("Method: "  		   + http.getRequestMethod());
-
-			DataOutputStream dos = new DataOutputStream(http.getOutputStream());
-			dos.writeBytes(params);
-			dos.flush();
-			dos.close();
-
-			// TODO: remover 5
-			System.out.println("getCnpjCaptcha(): Response Cookie: "   + http.getHeaderField("Set-Cookie"));
-			System.out.println("getCnpjCaptcha(): Method: "  		   + http.getRequestMethod());
-			System.out.println("getCnpjCaptcha(): Content: " 		   + http.getContent().toString());
-			System.out.println("getCnpjCaptcha(): Content Type: "      + http.getContentType().toString());
-			System.out.println("getCnpjCaptcha(): Response Code: "     + http.getResponseCode());
-			
-			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream()));
-			String aux;
-			StringBuilder inputStr = new StringBuilder();
-			while((aux = br.readLine()) != null) {
-				inputStr.append(aux)
-						.append("\n");
-			}
-			br.close();
-			
-			http.disconnect();
-			return getCnpjData(inputStr.toString());
-		} catch(Exception ex) {
-			ex.printStackTrace();
-			return null;
-		}
-	}
-	
-	/**
-	 * TODO: remover *
-	 * Mostra o header da requisição
-	 * @param headerMap
-	 * @return String 
-	 */
-	public String getRequestHeaders(Map<String, List<String>> headerMap) {
-		StringBuilder sb = new StringBuilder();
-		for(Map.Entry<String, List<String>> e : headerMap.entrySet()) {
-			for(String i : e.getValue()) {
-				sb.append(e.getKey())
-				  .append(": ")
-				  .append(i)
-				  .append("\n");
-			}
-		}
-		return sb.toString();
-	}
-	
-	/**
-	 * Recebe o link de redirecionamento e busca os dados da empresa
-	 * @param source
-	 * @return String
-	 */
-	public String getCnpjData(String source) {
-		try {
-			source = source.substring(source.indexOf("\"") + 1, source.lastIndexOf("\""));
-			
-			HttpURLConnection http = getHttpUrlConnection("http://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/" + source.replaceAll("&amp;", "&"));
-			http.setDoInput(true);
-			http.setDoOutput(true);
-			http.setInstanceFollowRedirects(true);
-			http.setRequestProperty("Cookie", "flag=1; " + cookie + "; " + session);
-			http.connect();
-			
-			BufferedReader br = new BufferedReader(new InputStreamReader(http.getInputStream(), Charset.forName("ISO-8859-1")));
-			String aux;
-			StringBuilder inputStr = new StringBuilder();
-			while((aux = br.readLine()) != null) {
-				inputStr.append(aux)
-						.append("\n");
-			}
-			br.close();
-			http.disconnect();
-			return inputStr.toString();
-		} catch(IOException ex) {
-			ex.printStackTrace();
-		}
-		return source;
-	}
-	
-	public String getCleanFields(String data) {
-		DataFilter df = new DataFilter(data);
-		StringBuilder out = new StringBuilder();
-		
-		out.append("Número de inscrição:\t")
-		   .append(df.getInfo("NÚMERO DE INSCRIÇÃO", "COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL"))
-		   .append("\n");
-		
-		out.append("Nome empresarial:\t")
-		   .append(df.getInfo("NOME EMPRESARIAL", "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)"))
-		   .append("\n");
-		   
-	   out.append("Título do estabelecimento: ")
-		   .append(df.getInfo("TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)", "CÓDIGO DE DESCRICAO DA ATIVIDADE ECONÔMICA PRINCIPAL"))
-		   .append("\n");
-	   
-	   out.append("Data de abertura:\t")
-	   	  .append(df.getInfo("DATA DE ABERTURA", "NOME EMPRESARIAL"))
-	      .append("\n");
-	   
-	   out.append("Nome empresarial:\t")
-	   	  .append(df.getInfo("NOME EMPRESARIAL", "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)"))
-	      .append("\n");
-	   
-	   out.append("Nome de fantasia:\t")
-	   	  .append(df.getInfo("TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)", "CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL"))
-	      .append("\n");
-	   
-//	   out.append("Logradouro:\t")
-//	   	  .append(df.getInfo("LOGRADOURO", "NÚMERO"))
-//	      .append("\n");
-	   
-//	   out.append("Número:\t")
-//	   	  .append(df.getInfo("NÚMERO", "COMPLEMENTO"))
-//	      .append("\n");
-	   
-	   out.append("Complemento:\t")
-	   	  .append(df.getInfo("COMPLEMENTO", "CEP"))
-	      .append("\n");
-	   
-	   out.append("CEP:\t")
-	   	  .append(df.getInfo("CEP", "BAIRRO/DISTRITO"))
-	      .append("\n");
-	   
-	   out.append("Bairro:\t")
-	   	  .append(df.getInfo("BAIRRO/DISTRITO", "MUNICIPIO"))
-	      .append("\n");
-	   
-	   out.append("Municipio:\t")
-	   	  .append(df.getInfo("MUNICIPIO", "UF"))
-	      .append("\n");
-	   
-	   out.append("UF:\t")
-	   	  .append(df.getInfo("UF", "SITUACAO CADASTRAL"))
-	      .append("\n");
-	   
-	   out.append("Situação cadastral:\t")
-	   	  .append(df.getInfo("SITUACAO CADASTRAL", "DATA DA SITUAÇÃO CADASTRAL"))
-	      .append("\n");
-	   
-	   
-	   return out.toString();
+		cnpjCatcher.postData(captchaTextField.getText(), cnpjTextField.getText());
+		List<String> fieldList = new ArrayList<String>(
+				Arrays.asList(new String[] {
+						"NOME EMPRESARIAL", "TÍTULO DO ESTABELECIMENTO (NOME DE FANTASIA)",
+						"NÚMERO DE INSCRIÇÃO", "COMPROVANTE DE INSCRIÇÃO E DE SITUAÇÃO CADASTRAL",
+						"CÓDIGO E DESCRIÇÃO DA ATIVIDADE ECONÔMICA PRINCIPAL", 
+						"CÓDIGO E DESCRIÇÃO DAS ATIVIDADES ECONÔMICAS SECUNDÁRIAS", 
+						"CÓDIGO E DESCRIÇÃO DA NATUREZA JURÍDICA", "LOGRADOURO", "NÚMERO", 
+						"COMPLEMENTO", "CEP", "BAIRRO/DISTRITO", "UF", "SITUAÇÃO CADASTRAL", 
+						"DATA DA SITUAÇÃO CADASTRAL", "MOTIVO DE SITUAÇÃO CADASTRAL", 
+						"MOTIVO DE SITUAÇÃO CADASTRAL", "DATA DA SITUAÇÃO ESPECIAL"
+				})
+			);
+		return cnpjCatcher.getCnpjDataMap(fieldList).toString();
 	}
 }
