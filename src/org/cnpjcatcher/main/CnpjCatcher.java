@@ -16,7 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Contém os métodos para trazer o captcha, sessão e os dados empresa 
+ * Contém os métodos para trazer o captcha, sessão e os dados empresa
+ * a partir do site da RFB.
  * 
  * @author jaumzera
  * @version Mar 09th, 2011
