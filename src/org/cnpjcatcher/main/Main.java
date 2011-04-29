@@ -50,7 +50,7 @@ public class Main {
 		
 		jf.add(cnpjLabel);
 		cnpjTextField.setSize(20, 100);
-		cnpjTextField.setText("31456338000186"); // remover
+		cnpjTextField.setText("12906174000105"); // remover
 		jf.add(cnpjTextField);
 		
 		final JLabel imageLabel = getCaptchaLabel();
@@ -62,7 +62,12 @@ public class Main {
 		enviarJButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				popup = new JFrame("Resultado " + new Date());
+				if(popup == null) {
+					popup = new JFrame("Resultado " + cnpjTextField.getText() + " "  + new Date());
+				} else {
+					popup.setTitle("Resultado " + cnpjTextField.getText() + " " + new Date());
+				}
+				
 				popup.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 				popup.setSize(640, 480);
 				JEditorPane textArea = new JEditorPane();
@@ -80,8 +85,9 @@ public class Main {
 		trocarImagemJButton.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-//				ImageIcon ii = new ImageIcon(getCnpjCaptcha());
-//				imageLabel.setIcon(ii);
+				ImageIcon ii = new ImageIcon(cnpjCatcher.getCaptchaImageBytes());
+				imageLabel.setIcon(ii);
+				mainFrame.repaint();
 			}
 		});
 		
