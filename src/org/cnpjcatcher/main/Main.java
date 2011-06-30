@@ -18,6 +18,12 @@ import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 
+/**
+ * testando egt eclipse mendingo...rsrsrs
+ * @author tiagovaz
+ *
+ */
+
 public class Main {
 	
 	private JFrame mainFrame = new JFrame("CNPJ Catcher");
