@@ -15,6 +15,8 @@ import javax.swing.event.HyperlinkListener;
 public class Main2 {
 	private URL url;
 
+	
+	///teste
 	private JFrame mainFrame = new JFrame("Consultar CNPJ");
 
 	private JEditorPane htmlArea;
